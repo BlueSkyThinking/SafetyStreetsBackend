@@ -5,8 +5,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.Base64;
-
 @Getter
 @Setter
 @AllArgsConstructor
@@ -17,5 +15,5 @@ public class CameraDetailInfo {
     private String address;
     private String videoAndroid;
     private Double dangerLevel;
-    private Base64 image;
+    private String image;
 }
