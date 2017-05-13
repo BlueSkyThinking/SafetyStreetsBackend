@@ -8,6 +8,6 @@ public interface CameraService {
 
     CameraDetailInfo getCameraDetailInfo(long id);
     List<CameraForMap> getAll();
-    List<Camera> search(Filter filter);
+    List<CameraListElement> search(Filter filter);
     List<NearCamera> getNearCameras(double latitude, double longitude);
 }

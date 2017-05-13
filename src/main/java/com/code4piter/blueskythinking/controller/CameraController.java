@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/camera")
+//@RequestMapping("/camera")
 public class CameraController {
 
     @Autowired
@@ -25,7 +25,7 @@ public class CameraController {
     }
 
     @RequestMapping(value = "/search", method = RequestMethod.POST, consumes = "application/json", produces = "application/json")
-    public List<Camera> getCameraFilter(@RequestBody Filter filter){
+    public List<CameraListElement> getCameraFilter(@RequestBody Filter filter){
         return service.search(filter);
     }
 

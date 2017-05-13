@@ -2,6 +2,7 @@ package com.code4piter.blueskythinking.service;
 
 import com.code4piter.blueskythinking.entity.*;
 import com.code4piter.blueskythinking.repository.CameraRepository;
+import com.code4piter.blueskythinking.repository.WordRepository;
 import com.code4piter.blueskythinking.utils.GeoTools;
 import com.code4piter.blueskythinking.utils.GoogleVision;
 import com.code4piter.blueskythinking.utils.VideoStremer;
@@ -11,26 +12,35 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import sun.misc.BASE64Encoder;
 
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-public class CameraServiceImpl implements CameraService{
+public class CameraServiceImpl implements CameraService {
 
     @Autowired
     private CameraRepository repository;
+
+    @Autowired
+    private WordRepository wordRepository;
 
     @Override
     public CameraDetailInfo getCameraDetailInfo(long id) {
         Camera camera = repository.findOne(id);
         BASE64Encoder encoder = new BASE64Encoder();
         byte[] imageBytes = getImage(camera.getVideoFlv());
+
         String imageString = encoder.encode(imageBytes);
         CameraDetailInfo detailInfo = new CameraDetailInfo(camera.getName(),
                 camera.getAddress(),
                 camera.getVideoAndroid(),
-                80.0,
+                getStats(imageBytes),
                 imageString);
         return detailInfo;
     }
@@ -40,20 +50,43 @@ public class CameraServiceImpl implements CameraService{
         List<Camera> cameras = repository.findAll();
         List<CameraForMap> cameraForMap = new ArrayList<>();
         for (Camera camera : cameras) {
-            CameraForMap e = new CameraForMap(camera.getId(), camera.getLatitude(), camera.getLongitude());
+            CameraForMap e =
+                    new CameraForMap(camera.getId(), camera.getLatitude(), camera.getLongitude());
             cameraForMap.add(e);
         }
         return cameraForMap;
     }
 
     @Override
-    public List<Camera> search(Filter filter) {
+    public List<CameraListElement> search(Filter filter) {
+        List<Camera> list = repository.findAll();
+        List<CameraListElement> cameras = new ArrayList<>();
+
+        for (Camera camera : list) {
+            CameraListElement element = new CameraListElement(camera.getId(), camera.getName(),
+                    camera.getAddress(), camera.getLatitude(), camera.getLongitude());
+            cameras.add(element);
+        }
+
         if (filter.getSearch() != null)
-            return repository.findAll()
-                    .stream()
-                    .filter(e -> (e.getName()).equals(filter.getSearch()))
+            cameras = cameras
+                    .parallelStream()
+                    .filter(e -> (e.getName().toLowerCase()).contains(filter.getSearch().toLowerCase()))
                     .collect(Collectors.toList());
-        return null;
+        if (filter.getDistance() != null)
+            cameras = cameras
+                    .parallelStream()
+                    .filter(e -> ((GeoTools.distination(
+                            e.getLatitude(),
+                            e.getLongitude(),
+                            filter.getLatitude(),
+                            filter.getLongitude()
+                            )) <= filter.getDistance()))
+                    .collect(Collectors.toList());
+        if (filter.getSortDirection() != null)
+            if (!filter.getSortDirection())
+                Collections.reverse(cameras);
+        return cameras;
     }
 
     @Override
@@ -62,7 +95,8 @@ public class CameraServiceImpl implements CameraService{
         List<NearCamera> nearCamera = new ArrayList<>();
         for (Camera camera : cameras) {
             if (camera.getLatitude() != latitude && camera.getLongitude() != longitude)
-                if (GeoTools.distination(latitude, longitude, camera.getLatitude(), camera.getLongitude()) <= 20000) {
+                if (GeoTools.distination(
+                        latitude, longitude, camera.getLatitude(), camera.getLongitude()) <= 20000) {
                     NearCamera e = new NearCamera(camera.getId(), camera.getName());
                     nearCamera.add(e);
                 }
@@ -74,21 +108,60 @@ public class CameraServiceImpl implements CameraService{
         return VideoStremer.saveImage(url);
     }
 
-    public void getStats() {
-        String cam5 = "http://46.243.177.176:2222/XUN75U4HQKN6ZVXN74VKW5LMF2FOOKPP7KJC2U6VF5AGRFRRTFSASLDHHJRLUDPD2XD44UQR3FTMJG7Q2ICTW5ICRKBFXNDQSEOSJCZIYXGLS5ZR6EHMTS4NU2JZZEMOV6ZHKEBTN26BFE4PJXZN375T3LJX3TEZCWS3YKTVKPIYB62NHAURXLWA736QBFRLHIMWEDOYMJIBG6QQQUBQDVOTDWLA7FIGOAUC2YEYGLMXQWZ3XS4XLMBM4NP22S62YVOSHKV2Q52YIIO5P46DLGAH2372T4TPNO5X43BNOWOJ7GSC7W2MU4TZSDNUKK4RKX5WYI5LQ2FRJ552NIRT272IZGPYHDWBNNOEUJQ/4cb262910fd4c6cd51f64ea7163194cc-public";
+    public Double getStats(byte[] data) {
+        String filename = "D:/images/" + System.currentTimeMillis() + ".png";
+        try {
+            InputStream input = new ByteArrayInputStream(data);
+            BufferedImage bufferedImage = ImageIO.read(input);
 
-        String fileName = "D:/images/1.jpg";
-        List<AnnotateImageResponse> response = GoogleVision.getStats(fileName);
+            BufferedImage scaled = new BufferedImage(1024, 768, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = scaled.createGraphics();
+            g.drawImage(bufferedImage, 0, 0, 1024, 768, null);
+            g.dispose();
+            ImageIO.write(scaled, "png", new File(filename));
 
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        List<AnnotateImageResponse> response = GoogleVision.getStats(filename);
+
+        double result = 0;
         for (AnnotateImageResponse res : response) {
             if (res.hasError()) {
                 System.out.printf("Error: %s\n", res.getError().getMessage());
-                return;
+                return null;
             }
 
+            List<String> words = new ArrayList<>();
             for (EntityAnnotation annotation : res.getLabelAnnotationsList()) {
-                annotation.getAllFields().forEach((k, v)->System.out.printf("%s : %s\n", k, v.toString()));
+                annotation.getAllFields().forEach((k, v) -> {
+                    if (k.getFullName().contains("description"))
+                        words.add(v.toString());
+                });
             }
+
+            double count = 0;
+            double value = 0;
+            List<Word> dictionary = wordRepository.findAll();
+            for (int i = 0; i < dictionary.size(); i++) {
+                for (String word : words) {
+                    if (dictionary.get(i).getWord().toLowerCase().contains(word.toLowerCase())) {
+                        System.out.println(word);
+                        value += dictionary.get(i).getValue();
+                        count++;
+                    }
+                }
+            }
+
+            System.out.println("VALUE: " + value);
+            System.out.println("COUNT: " + count);
+            if (count != 0)
+                result = value / count;
+            else
+                result = 0;
         }
+
+        return result;
     }
 }

@@ -5,17 +5,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Getter
 @Setter
+@Getter
 @AllArgsConstructor
 @NoArgsConstructor
-public class Filter {
+public class CameraListElement {
 
-    private String search;
-    private Double distance;
-    private Double dangerLevel;
-    private String sortBy;
+    private Long id;
+    private String name;
+    private String address;
     private Double latitude;
     private Double longitude;
-    private Boolean sortDirection;
 }
