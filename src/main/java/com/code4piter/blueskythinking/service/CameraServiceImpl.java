@@ -96,7 +96,7 @@ public class CameraServiceImpl implements CameraService {
         for (Camera camera : cameras) {
             if (camera.getLatitude() != latitude && camera.getLongitude() != longitude)
                 if (GeoTools.distination(
-                        latitude, longitude, camera.getLatitude(), camera.getLongitude()) <= 20000) {
+                        latitude, longitude, camera.getLatitude(), camera.getLongitude()) <= 15000) {
                     NearCamera e = new NearCamera(camera.getId(), camera.getName());
                     nearCamera.add(e);
                 }
